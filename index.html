@@ -70,7 +70,227 @@ function scrollCart(){document.getElementById('cart').scrollIntoView({behavior:'
 function showModal(content){document.getElementById('modalContent').innerHTML=content;document.getElementById('modalback').style.display='flex'}
 function closeModal(){document.getElementById('modalback').style.display='none'}
 function productDetails(id){let p=products.find(x=>x.id===id);showModal(`<h2>${esc(p.name)}</h2><div style="font-size:70px;text-align:center;padding:20px">${p.image?`<img src="${p.image}" style="max-width:100%;max-height:220px">`:p.emoji||'📦'}</div><h2 style="color:var(--orange)">${money(p.price)}</h2><p>${esc(p.description||'')}</p><p>Category: ${esc(p.category)} | Stock: ${p.stock}</p><button class="btn" onclick="addToCart('${p.id}');closeModal()">Add to Cart</button>`)}
-function openCheckout(){let entries=Object.entries(cart).filter(([id,q])=>q>0&&products.some(p=>p.id===id));if(!entries.length)return toast('Add a product to your cart first.');let total=entries.reduce((s,[id,q])=>s+products.find(p=>p.id===id).price*q,0)+5000;showModal(`<h2>Checkout</h2><p>Please enter your delivery details.</p><form id="checkoutForm"><div class="formgrid"><div class="field"><label>Full name *</label><input name="name" required></div><div class="field"><label>Phone number *</label><input name="phone" placeholder="07XX XXX XXX" required></div></div><div class="field"><label>Delivery address / area *</label><input name="address" placeholder="Street, ward, city" required></div><div class="field"><label>Payment method</label><div class="payoptions"><label class="payoption"><input type="radio" name="pay" value="Mobile Money" checked> Mobile Money</label><label class="payoption"><input type="radio" name="pay" value="Cash on Delivery"> Cash on Delivery</label><label class="payoption"><input type="radio" name="pay" value="Bank / Card"> Bank / Card</label><label class="payoption"><input type="radio" name="pay" value="Contact me"> Contact me</label></div></div><div class="notice">Order total: <b>${money(total)}</b><br>Demo checkout: this records an order on this device. Real mobile-money/card collection requires a payment gateway integration and merchant account.</div><button class="btn checkout" type="submit">Place Order</button></form>`);document.getElementById('checkoutForm').onsubmit=e=>{e.preventDefault();let fd=new FormData(e.target),order={id:'SN'+Date.now().toString().slice(-8),name:fd.get('name'),phone:fd.get('phone'),address:fd.get('address'),payment:fd.get('pay'),items:entries.map(([id,q])=>({name:products.find(p=>p.id===id).name,qty:q,price:products.find(p=>p.id===id).price})),total,status:'Order received',date:new Date().toLocaleString()};let orders=JSON.parse(localStorage.getItem('sn_orders')||'[]');orders.unshift(order);localStorage.setItem('sn_orders',JSON.stringify(orders));entries.forEach(([id,q])=>{let p=products.find(x=>x.id===id);if(p)p.stock=Math.max(0,p.stock-q)});cart={};save();renderCart();renderProducts();closeModal();showModal(`<h2 style="color:var(--green)">✓ Order received!</h2><p>Thank you, ${esc(order.name)}. Your order number is <b>${order.id}</b>.</p><p>Payment method: ${esc(order.payment)}</p><p>We have saved the order in this browser. The seller should contact you to confirm payment and delivery.</p><button class="btn" onclick="closeModal()">Continue Shopping</button>`)}}
+async function openCheckout(){
+
+    let entries = Object.entries(cart)
+        .filter(([id,q]) => q > 0 && products.some(p => String(p.id) === String(id)));
+
+    if(!entries.length){
+        return toast('Add a product to your cart first.');
+    }
+
+    let total = entries.reduce(
+        (s,[id,q]) => s + Number(products.find(p => String(p.id) === String(id)).price) * q,
+        0
+    ) + 5000;
+
+    showModal(`
+        <h2>Checkout</h2>
+
+        <p>Please enter your delivery details.</p>
+
+        <form id="checkoutForm">
+
+            <div class="formgrid">
+
+                <div class="field">
+                    <label>Full name *</label>
+                    <input name="name" required>
+                </div>
+
+                <div class="field">
+                    <label>Phone number *</label>
+                    <input
+                        name="phone"
+                        placeholder="07XX XXX XXX"
+                        required
+                    >
+                </div>
+
+            </div>
+
+            <div class="field">
+                <label>Delivery address / area *</label>
+                <input
+                    name="address"
+                    placeholder="Street, ward, city"
+                    required
+                >
+            </div>
+
+            <div class="field">
+                <label>Payment method</label>
+
+                <div class="payoptions">
+
+                    <label class="payoption">
+                        <input
+                            type="radio"
+                            name="pay"
+                            value="Mobile Money"
+                            checked
+                        >
+                        Mobile Money
+                    </label>
+
+                    <label class="payoption">
+                        <input
+                            type="radio"
+                            name="pay"
+                            value="Cash on Delivery"
+                        >
+                        Cash on Delivery
+                    </label>
+
+                    <label class="payoption">
+                        <input
+                            type="radio"
+                            name="pay"
+                            value="Bank / Card"
+                        >
+                        Bank / Card
+                    </label>
+
+                    <label class="payoption">
+                        <input
+                            type="radio"
+                            name="pay"
+                            value="Contact me"
+                        >
+                        Contact me
+                    </label>
+
+                </div>
+            </div>
+
+            <div class="notice">
+                Order total: <b>${money(total)}</b>
+            </div>
+
+            <button class="btn checkout" type="submit">
+                Place Order
+            </button>
+
+        </form>
+    `);
+
+    document.getElementById('checkoutForm').onsubmit = async e => {
+
+        e.preventDefault();
+
+        const button = e.target.querySelector('button[type="submit"]');
+
+        button.disabled = true;
+        button.textContent = "Processing...";
+
+        const fd = new FormData(e.target);
+
+        const items = entries.map(([id,q]) => {
+
+            const product = products.find(
+                p => String(p.id) === String(id)
+            );
+
+            return {
+                product_id: Number(product.id),
+                quantity: Number(q)
+            };
+
+        });
+
+        const orderData = {
+
+            customer_name: fd.get('name'),
+
+            phone: fd.get('phone'),
+
+            address: fd.get('address'),
+
+            items: items
+
+        };
+
+        try {
+
+            const response = await fetch(
+                API_URL + "/api/orders",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify(orderData)
+                }
+            );
+
+            const data = await response.json();
+
+            if(!response.ok){
+                throw new Error(
+                    data.error || data.message || "Order failed"
+                );
+            }
+
+            // Clear cart
+            cart = {};
+
+            save();
+
+            // Reload products so stock is updated
+            await loadProducts();
+
+            renderCart();
+
+            closeModal();
+
+            showModal(`
+                <h2 style="color:var(--green)">
+                    ✓ Order received!
+                </h2>
+
+                <p>
+                    Thank you, ${esc(orderData.customer_name)}.
+                </p>
+
+                <p>
+                    Your order number is
+                    <b>SN${data.order.id}</b>.
+                </p>
+
+                <p>
+                    Payment method:
+                    ${esc(fd.get('pay'))}
+                </p>
+
+                <p>
+                    Your order has been saved successfully.
+                    We will contact you to confirm payment and delivery.
+                </p>
+
+                <button
+                    class="btn"
+                    onclick="closeModal()"
+                >
+                    Continue Shopping
+                </button>
+            `);
+
+        } catch(error) {
+
+            console.error("Order error:", error);
+
+            button.disabled = false;
+            button.textContent = "Place Order";
+
+            toast(
+                "Order failed: " + error.message
+            );
+        }
+
+    };
+}
 function openAdmin(){showModal(`<h2>Seller / Admin Login</h2><p>Enter the local demo password to manage products, orders and ads.</p><form id="adminForm"><div class="field"><label>Demo password</label><input name="password" type="password" placeholder="Enter password" required></div><div class="notice"> password: <b>IBRAHIMU1</b>. Change this before deploying publicly. This local login is not secure enough for a live store.</div><button class="btn checkout">Enter Seller Mode</button></form>`);document.getElementById('adminForm').onsubmit=e=>{e.preventDefault();if(new FormData(e.target).get('password')==='shop123'){admin=true;document.getElementById('adminbar').classList.add('show');closeModal();renderProducts();toast('Seller mode enabled')}else toast('Incorrect password')}}
 function logoutAdmin(){admin=false;document.getElementById('adminbar').classList.remove('show');renderProducts()}
 function openProductForm(){if(!admin)return;showModal(`<h2>Add a Product</h2><form id="productForm"><div class="field"><label>Product name *</label><input name="name" required></div><div class="formgrid"><div class="field"><label>Price (TSh) *</label><input name="price" type="number" min="0" required></div><div class="field"><label>Old price (optional)</label><input name="old" type="number" min="0"></div></div><div class="formgrid"><div class="field"><label>Category</label><select name="category">${categories.slice(1).map(c=>`<option>${c[0]}</option>`).join('')}</select></div><div class="field"><label>Stock quantity</label><input name="stock" type="number" min="0" value="10"></div></div><div class="field"><label>Short description</label><textarea name="description"></textarea></div><div class="field"><label>Product image URL (optional)</label><input name="image" type="url" placeholder="https://..."></div><div class="field"><label>Emoji icon if no image</label><input name="emoji" maxlength="4" placeholder="📦"></div><button class="btn checkout">Save Product</button></form>`);document.getElementById('productForm').onsubmit=e=>{e.preventDefault();let f=new FormData(e.target);products.unshift({id:'p'+Date.now(),name:f.get('name'),price:+f.get('price'),oldPrice:+f.get('old')||0,category:f.get('category'),stock:+f.get('stock')||0,description:f.get('description'),image:f.get('image'),emoji:f.get('emoji')||'📦'});save();renderProducts();closeModal();toast('Product published to your store')}}
