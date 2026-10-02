@@ -51,7 +51,40 @@ const defaultProducts=[
 {id:'p7',name:'Rice 5kg',category:'Food',price:14500,oldPrice:0,emoji:'🍚',description:'Everyday family rice pack.',stock:40,featured:false},
 {id:'p8',name:'Wrist Watch',category:'Fashion',price:72000,oldPrice:90000,emoji:'⌚',description:'Classic look for daily wear.',stock:10,featured:false}
 ];
-let products=JSON.parse(localStorage.getItem('sn_products')||'null')||defaultProducts;
+let products = [];
+
+const API_URL = "https://shopnamimi-backend.onrender.com";
+
+async function loadProducts() {
+    try {
+        const response = await fetch(API_URL + "/api/products");
+
+        if (!response.ok) {
+            throw new Error("Failed to load products");
+        }
+
+        const data = await response.json();
+
+        products = data.map(p => ({
+            id: String(p.id),
+            name: p.name,
+            description: p.description || "",
+            price: Number(p.price),
+            oldPrice: 0,
+            category: p.category || "Other",
+            stock: Number(p.stock) || 0,
+            image: p.image || "",
+            emoji: "📦"
+        }));
+
+        renderProducts();
+
+    } catch (error) {
+        console.error("Product loading error:", error);
+        products = [];
+        renderProducts();
+    }
+}
 let cart=JSON.parse(localStorage.getItem('sn_cart')||'{}');
 let ads=JSON.parse(localStorage.getItem('sn_ads')||'[]');
 let category='All',query='',admin=false;
