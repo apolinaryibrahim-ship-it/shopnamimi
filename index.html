@@ -334,7 +334,12 @@ function deleteAd(id){ads=ads.filter(a=>a.id!==id);save();renderAds()}
 function showOrders(){let orders=JSON.parse(localStorage.getItem('sn_orders')||'[]');if(!orders.length)return showModal('<h2>My Orders</h2><p>No orders have been placed on this browser yet.</p>');showModal(`<h2>Recent Orders</h2>${orders.map(o=>`<div style="border:1px solid var(--line);border-radius:9px;padding:13px;margin:10px 0"><b>${o.id}</b> — ${money(o.total)}<p style="margin:6px 0">${esc(o.date)} | ${esc(o.status)}</p><small>${o.items.map(i=>esc(i.name)+' × '+i.qty).join(', ')}</small></div>`).join('')}`)}
 function exportData(){let data={products,ads,orders:JSON.parse(localStorage.getItem('sn_orders')||'[]')};let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='shopnamimi-store-data.json';a.click();URL.revokeObjectURL(url)}
 document.getElementById('searchForm').addEventListener('submit',e=>{e.preventDefault();query=document.getElementById('searchInput').value.trim();renderProducts();document.getElementById('shop').scrollIntoView({behavior:'smooth'})});
-document.getElementById('year').textContent=new Date().getFullYear();renderCategories();renderProducts();renderCart();renderAds();
+document.getElementById('year').textContent = new Date().getFullYear();
+
+renderCategories();
+renderCart();
+renderAds();
+loadProducts();
 </script>
 </body>
 </html>
