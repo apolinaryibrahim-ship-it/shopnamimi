@@ -326,8 +326,157 @@ async function openCheckout(){
 }
 function openAdmin(){showModal(`<h2>Seller / Admin Login</h2><p>Enter the local demo password to manage products, orders and ads.</p><form id="adminForm"><div class="field"><label>Demo password</label><input name="password" type="password" placeholder="Enter password" required></div><div class="notice"> password: <b>IBRAHIMU1</b>. Change this before deploying publicly. This local login is not secure enough for a live store.</div><button class="btn checkout">Enter Seller Mode</button></form>`);document.getElementById('adminForm').onsubmit=e=>{e.preventDefault();if(new FormData(e.target).get('password')==='shop123'){admin=true;document.getElementById('adminbar').classList.add('show');closeModal();renderProducts();toast('Seller mode enabled')}else toast('Incorrect password')}}
 function logoutAdmin(){admin=false;document.getElementById('adminbar').classList.remove('show');renderProducts()}
-function openProductForm(){if(!admin)return;showModal(`<h2>Add a Product</h2><form id="productForm"><div class="field"><label>Product name *</label><input name="name" required></div><div class="formgrid"><div class="field"><label>Price (TSh) *</label><input name="price" type="number" min="0" required></div><div class="field"><label>Old price (optional)</label><input name="old" type="number" min="0"></div></div><div class="formgrid"><div class="field"><label>Category</label><select name="category">${categories.slice(1).map(c=>`<option>${c[0]}</option>`).join('')}</select></div><div class="field"><label>Stock quantity</label><input name="stock" type="number" min="0" value="10"></div></div><div class="field"><label>Short description</label><textarea name="description"></textarea></div><div class="field"><label>Product image URL (optional)</label><input name="image" type="url" placeholder="https://..."></div><div class="field"><label>Emoji icon if no image</label><input name="emoji" maxlength="4" placeholder="📦"></div><button class="btn checkout">Save Product</button></form>`);document.getElementById('productForm').onsubmit=e=>{e.preventDefault();let f=new FormData(e.target);products.unshift({id:'p'+Date.now(),name:f.get('name'),price:+f.get('price'),oldPrice:+f.get('old')||0,category:f.get('category'),stock:+f.get('stock')||0,description:f.get('description'),image:f.get('image'),emoji:f.get('emoji')||'📦'});save();renderProducts();closeModal();toast('Product published to your store')}}
-function deleteProduct(id){if(!admin)return;if(confirm('Remove this product from your shop?')){products=products.filter(p=>p.id!==id);delete cart[id];save();renderProducts();renderCart()}}
+async function openProductForm(){
+
+    if(!admin) return;
+
+    showModal(`
+        <h2>Add a Product</h2>
+
+        <form id="productForm">
+
+            <div class="field">
+                <label>Product name *</label>
+                <input name="name" required>
+            </div>
+
+            <div class="formgrid">
+
+                <div class="field">
+                    <label>Price (TSh) *</label>
+                    <input name="price" type="number" min="0" required>
+                </div>
+
+                <div class="field">
+                    <label>Old price (optional)</label>
+                    <input name="old" type="number" min="0">
+                </div>
+
+            </div>
+
+            <div class="formgrid">
+
+                <div class="field">
+                    <label>Category</label>
+
+                    <select name="category">
+                        ${categories.slice(1).map(c =>
+                            `<option value="${esc(c[0])}">${esc(c[0])}</option>`
+                        ).join('')}
+                    </select>
+
+                </div>
+
+                <div class="field">
+                    <label>Stock quantity</label>
+                    <input name="stock" type="number" min="0" value="10">
+                </div>
+
+            </div>
+
+            <div class="field">
+                <label>Short description</label>
+                <textarea name="description"></textarea>
+            </div>
+
+            <div class="field">
+                <label>Product image URL (optional)</label>
+                <input name="image" type="url" placeholder="https://...">
+            </div>
+
+            <div class="field">
+                <label>Emoji icon if no image</label>
+                <input name="emoji" maxlength="4" placeholder="📦">
+            </div>
+
+            <button class="btn checkout" type="submit">
+                Save Product
+            </button>
+
+        </form>
+    `);
+
+    document.getElementById('productForm').onsubmit = async e => {
+
+        e.preventDefault();
+
+        const form = e.target;
+        const button = form.querySelector('button[type="submit"]');
+
+        button.disabled = true;
+        button.textContent = "Saving...";
+
+        const f = new FormData(form);
+
+        const productData = {
+
+            name: f.get('name'),
+
+            description: f.get('description') || "",
+
+            price: Number(f.get('price')),
+
+            image: f.get('image') || "",
+
+            category: f.get('category') || "Other",
+
+            stock: Number(f.get('stock')) || 0
+
+        };
+
+        try {
+
+            const response = await fetch(
+                API_URL + "/api/products",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify(productData)
+                }
+            );
+
+            const data = await response.json();
+
+            if(!response.ok){
+
+                throw new Error(
+                    data.error ||
+                    data.message ||
+                    "Failed to add product"
+                );
+
+            }
+
+            toast("Product added successfully!");
+
+            closeModal();
+
+            // Get the new product from PostgreSQL
+            await loadProducts();
+
+            renderProducts();
+
+            renderCart();
+
+        } catch(error){
+
+            console.error("Add product error:", error);
+
+            button.disabled = false;
+            button.textContent = "Save Product";
+
+            toast(
+                "Failed to add product: " +
+                error.message
+            );
+        }
+
+    };
+}
 function openAdForm(){showModal(`<h2>Advertise on ShopNamimi</h2><p>Submit a promotional banner or featured product. In this demo it appears in the Featured Advertisements section.</p><form id="adForm"><div class="field"><label>Business / campaign name *</label><input name="title" required></div><div class="field"><label>Ad message *</label><input name="message" required></div><div class="field"><label>Contact phone or WhatsApp</label><input name="contact"></div><div class="field"><label>Image URL (optional)</label><input name="image" type="url"></div><button class="btn checkout">Submit Advertisement</button></form>`);document.getElementById('adForm').onsubmit=e=>{e.preventDefault();let f=new FormData(e.target);ads.unshift({id:Date.now(),title:f.get('title'),message:f.get('message'),contact:f.get('contact'),image:f.get('image')});save();renderAds();closeModal();toast('Advertisement added')}}
 function renderAds(){let el=document.getElementById('adsList');el.innerHTML=ads.length?ads.map(a=>`<article class="product"><div class="pic">${a.image?`<img src="${esc(a.image)}">`:'📣'}</div><div class="pbody"><h3>${esc(a.title)}</h3><div class="desc">${esc(a.message)}</div>${a.contact?`<p>Contact: ${esc(a.contact)}</p>`:''}${admin?`<button onclick="deleteAd(${a.id})" class="detail" style="padding:9px;border-radius:6px">Remove ad</button>`:''}</div></article>`).join(''):'<p style="color:#667085">No paid or featured ads yet. Businesses can submit an ad using “Place an Ad”.</p>'}
 function deleteAd(id){ads=ads.filter(a=>a.id!==id);save();renderAds()}
