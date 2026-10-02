@@ -51,7 +51,31 @@ const defaultProducts=[
 {id:'p7',name:'Rice 5kg',category:'Food',price:14500,oldPrice:0,emoji:'🍚',description:'Everyday family rice pack.',stock:40,featured:false},
 {id:'p8',name:'Wrist Watch',category:'Fashion',price:72000,oldPrice:90000,emoji:'⌚',description:'Classic look for daily wear.',stock:10,featured:false}
 ];
-let products=JSON.parse(localStorage.getItem('sn_products')||'null')||defaultProducts;
+let products = [];
+const API_URL = "https://shopnamimi-backend.onrender.com";
+
+async function loadProducts() {
+    try {
+        const response = await fetch(API_URL + "/api/products");
+
+        if (!response.ok) {
+            throw new Error("Failed to load products");
+        }
+
+        products = await response.json();
+
+        renderProducts();
+        renderCart();
+
+        console.log("ShopNamimi products loaded:", products);
+
+    } catch (error) {
+        console.error("Product loading error:", error);
+
+        document.getElementById("products").innerHTML =
+            "<p>Unable to load products. Please try again later.</p>";
+    }
+}
 let cart=JSON.parse(localStorage.getItem('sn_cart')||'{}');
 let ads=JSON.parse(localStorage.getItem('sn_ads')||'[]');
 let category='All',query='',admin=false;
@@ -73,7 +97,128 @@ function productDetails(id){let p=products.find(x=>x.id===id);showModal(`<h2>${e
 function openCheckout(){let entries=Object.entries(cart).filter(([id,q])=>q>0&&products.some(p=>p.id===id));if(!entries.length)return toast('Add a product to your cart first.');let total=entries.reduce((s,[id,q])=>s+products.find(p=>p.id===id).price*q,0)+5000;showModal(`<h2>Checkout</h2><p>Please enter your delivery details.</p><form id="checkoutForm"><div class="formgrid"><div class="field"><label>Full name *</label><input name="name" required></div><div class="field"><label>Phone number *</label><input name="phone" placeholder="07XX XXX XXX" required></div></div><div class="field"><label>Delivery address / area *</label><input name="address" placeholder="Street, ward, city" required></div><div class="field"><label>Payment method</label><div class="payoptions"><label class="payoption"><input type="radio" name="pay" value="Mobile Money" checked> Mobile Money</label><label class="payoption"><input type="radio" name="pay" value="Cash on Delivery"> Cash on Delivery</label><label class="payoption"><input type="radio" name="pay" value="Bank / Card"> Bank / Card</label><label class="payoption"><input type="radio" name="pay" value="Contact me"> Contact me</label></div></div><div class="notice">Order total: <b>${money(total)}</b><br>Demo checkout: this records an order on this device. Real mobile-money/card collection requires a payment gateway integration and merchant account.</div><button class="btn checkout" type="submit">Place Order</button></form>`);document.getElementById('checkoutForm').onsubmit=e=>{e.preventDefault();let fd=new FormData(e.target),order={id:'SN'+Date.now().toString().slice(-8),name:fd.get('name'),phone:fd.get('phone'),address:fd.get('address'),payment:fd.get('pay'),items:entries.map(([id,q])=>({name:products.find(p=>p.id===id).name,qty:q,price:products.find(p=>p.id===id).price})),total,status:'Order received',date:new Date().toLocaleString()};let orders=JSON.parse(localStorage.getItem('sn_orders')||'[]');orders.unshift(order);localStorage.setItem('sn_orders',JSON.stringify(orders));entries.forEach(([id,q])=>{let p=products.find(x=>x.id===id);if(p)p.stock=Math.max(0,p.stock-q)});cart={};save();renderCart();renderProducts();closeModal();showModal(`<h2 style="color:var(--green)">✓ Order received!</h2><p>Thank you, ${esc(order.name)}. Your order number is <b>${order.id}</b>.</p><p>Payment method: ${esc(order.payment)}</p><p>We have saved the order in this browser. The seller should contact you to confirm payment and delivery.</p><button class="btn" onclick="closeModal()">Continue Shopping</button>`)}}
 function openAdmin(){showModal(`<h2>Seller / Admin Login</h2><p>Enter the local demo password to manage products, orders and ads.</p><form id="adminForm"><div class="field"><label>Demo password</label><input name="password" type="password" placeholder="Enter password" required></div><div class="notice"> password: <b>IBRAHIMU1</b>. Change this before deploying publicly. This local login is not secure enough for a live store.</div><button class="btn checkout">Enter Seller Mode</button></form>`);document.getElementById('adminForm').onsubmit=e=>{e.preventDefault();if(new FormData(e.target).get('password')==='shop123'){admin=true;document.getElementById('adminbar').classList.add('show');closeModal();renderProducts();toast('Seller mode enabled')}else toast('Incorrect password')}}
 function logoutAdmin(){admin=false;document.getElementById('adminbar').classList.remove('show');renderProducts()}
-function openProductForm(){if(!admin)return;showModal(`<h2>Add a Product</h2><form id="productForm"><div class="field"><label>Product name *</label><input name="name" required></div><div class="formgrid"><div class="field"><label>Price (TSh) *</label><input name="price" type="number" min="0" required></div><div class="field"><label>Old price (optional)</label><input name="old" type="number" min="0"></div></div><div class="formgrid"><div class="field"><label>Category</label><select name="category">${categories.slice(1).map(c=>`<option>${c[0]}</option>`).join('')}</select></div><div class="field"><label>Stock quantity</label><input name="stock" type="number" min="0" value="10"></div></div><div class="field"><label>Short description</label><textarea name="description"></textarea></div><div class="field"><label>Product image URL (optional)</label><input name="image" type="url" placeholder="https://..."></div><div class="field"><label>Emoji icon if no image</label><input name="emoji" maxlength="4" placeholder="📦"></div><button class="btn checkout">Save Product</button></form>`);document.getElementById('productForm').onsubmit=e=>{e.preventDefault();let f=new FormData(e.target);products.unshift({id:'p'+Date.now(),name:f.get('name'),price:+f.get('price'),oldPrice:+f.get('old')||0,category:f.get('category'),stock:+f.get('stock')||0,description:f.get('description'),image:f.get('image'),emoji:f.get('emoji')||'📦'});save();renderProducts();closeModal();toast('Product published to your store')}}
+async function openProductForm(){
+    if(!admin) return;
+
+    showModal(`
+        <h2>Add a Product</h2>
+
+        <form id="productForm">
+
+            <div class="field">
+                <label>Product name *</label>
+                <input name="name" required>
+            </div>
+
+            <div class="formgrid">
+
+                <div class="field">
+                    <label>Price (TSh) *</label>
+                    <input name="price" type="number" min="0" required>
+                </div>
+
+                <div class="field">
+                    <label>Old price (optional)</label>
+                    <input name="old" type="number" min="0">
+                </div>
+
+            </div>
+
+            <div class="formgrid">
+
+                <div class="field">
+                    <label>Category</label>
+                    <select name="category">
+                        ${categories.slice(1).map(c=>`<option>${c[0]}</option>`).join('')}
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label>Stock quantity</label>
+                    <input name="stock" type="number" min="0" value="10">
+                </div>
+
+            </div>
+
+            <div class="field">
+                <label>Short description</label>
+                <textarea name="description"></textarea>
+            </div>
+
+            <div class="field">
+                <label>Product image URL (optional)</label>
+                <input name="image" type="url" placeholder="https://...">
+            </div>
+
+            <div class="field">
+                <label>Emoji icon if no image</label>
+                <input name="emoji" maxlength="4" placeholder="📦">
+            </div>
+
+            <button class="btn checkout" type="submit">
+                Save Product
+            </button>
+
+        </form>
+    `);
+
+    document.getElementById('productForm').onsubmit = async e => {
+
+        e.preventDefault();
+
+        const f = new FormData(e.target);
+
+        const product = {
+            name: f.get('name'),
+            description: f.get('description'),
+            price: Number(f.get('price')),
+            image: f.get('image'),
+            category: f.get('category'),
+            stock: Number(f.get('stock')) || 0
+        };
+
+        try {
+
+            const response = await fetch(API_URL + "/api/products", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(product)
+            });
+
+            const data = await response.json();
+
+            if(!response.ok){
+                throw new Error(data.error || "Failed to save product");
+            }
+
+            // Add the new database product to the current page
+            products.unshift({
+                id: String(data.id),
+                name: data.name,
+                description: data.description || "",
+                price: Number(data.price),
+                oldPrice: Number(f.get('old')) || 0,
+                image: data.image || "",
+                category: data.category || "Other",
+                stock: Number(data.stock) || 0,
+                emoji: f.get('emoji') || "📦"
+            });
+
+            renderProducts();
+            closeModal();
+
+            toast("Product saved to PostgreSQL successfully!");
+
+        } catch(error) {
+
+            console.error(error);
+
+            toast("Failed to save product: " + error.message);
+        }
+    };
+}
 function deleteProduct(id){if(!admin)return;if(confirm('Remove this product from your shop?')){products=products.filter(p=>p.id!==id);delete cart[id];save();renderProducts();renderCart()}}
 function openAdForm(){showModal(`<h2>Advertise on ShopNamimi</h2><p>Submit a promotional banner or featured product. In this demo it appears in the Featured Advertisements section.</p><form id="adForm"><div class="field"><label>Business / campaign name *</label><input name="title" required></div><div class="field"><label>Ad message *</label><input name="message" required></div><div class="field"><label>Contact phone or WhatsApp</label><input name="contact"></div><div class="field"><label>Image URL (optional)</label><input name="image" type="url"></div><button class="btn checkout">Submit Advertisement</button></form>`);document.getElementById('adForm').onsubmit=e=>{e.preventDefault();let f=new FormData(e.target);ads.unshift({id:Date.now(),title:f.get('title'),message:f.get('message'),contact:f.get('contact'),image:f.get('image')});save();renderAds();closeModal();toast('Advertisement added')}}
 function renderAds(){let el=document.getElementById('adsList');el.innerHTML=ads.length?ads.map(a=>`<article class="product"><div class="pic">${a.image?`<img src="${esc(a.image)}">`:'📣'}</div><div class="pbody"><h3>${esc(a.title)}</h3><div class="desc">${esc(a.message)}</div>${a.contact?`<p>Contact: ${esc(a.contact)}</p>`:''}${admin?`<button onclick="deleteAd(${a.id})" class="detail" style="padding:9px;border-radius:6px">Remove ad</button>`:''}</div></article>`).join(''):'<p style="color:#667085">No paid or featured ads yet. Businesses can submit an ad using “Place an Ad”.</p>'}
@@ -81,7 +226,12 @@ function deleteAd(id){ads=ads.filter(a=>a.id!==id);save();renderAds()}
 function showOrders(){let orders=JSON.parse(localStorage.getItem('sn_orders')||'[]');if(!orders.length)return showModal('<h2>My Orders</h2><p>No orders have been placed on this browser yet.</p>');showModal(`<h2>Recent Orders</h2>${orders.map(o=>`<div style="border:1px solid var(--line);border-radius:9px;padding:13px;margin:10px 0"><b>${o.id}</b> — ${money(o.total)}<p style="margin:6px 0">${esc(o.date)} | ${esc(o.status)}</p><small>${o.items.map(i=>esc(i.name)+' × '+i.qty).join(', ')}</small></div>`).join('')}`)}
 function exportData(){let data={products,ads,orders:JSON.parse(localStorage.getItem('sn_orders')||'[]')};let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='shopnamimi-store-data.json';a.click();URL.revokeObjectURL(url)}
 document.getElementById('searchForm').addEventListener('submit',e=>{e.preventDefault();query=document.getElementById('searchInput').value.trim();renderProducts();document.getElementById('shop').scrollIntoView({behavior:'smooth'})});
-document.getElementById('year').textContent=new Date().getFullYear();renderCategories();renderProducts();renderCart();renderAds();
+document.getElementById('year').textContent = new Date().getFullYear();
+
+renderCategories();
+renderAds();
+renderCart();
+loadProducts();
 </script>
 </body>
 </html>
