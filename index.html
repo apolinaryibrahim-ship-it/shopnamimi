@@ -245,20 +245,40 @@ async function openCheckout(){
 
         try {
 
-            const response = await fetch(
-                API_URL + "/api/orders",
-                {
-                    method: "POST",
+          const response = await fetch(
+    API_URL + "/api/orders",
+    {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(orderData)
+    }
+);
 
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
+const responseText = await response.text();
 
-                    body: JSON.stringify(orderData)
-                }
-            );
+let data;
 
-            const data = await response.json();
+try {
+    data = JSON.parse(responseText);
+} catch (error) {
+    console.error("Server returned non-JSON:", responseText);
+
+    throw new Error(
+        "Server returned an invalid response. Please try again."
+    );
+}
+
+if (!response.ok) {
+    throw new Error(
+        data.error ||
+        data.message ||
+        "Failed to create order"
+    );
+}
+
+console.log("ORDER SUCCESS:", data);
 
             if(!response.ok){
                 throw new Error(
