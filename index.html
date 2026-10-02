@@ -335,7 +335,6 @@ function showOrders(){let orders=JSON.parse(localStorage.getItem('sn_orders')||'
 function exportData(){let data={products,ads,orders:JSON.parse(localStorage.getItem('sn_orders')||'[]')};let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='shopnamimi-store-data.json';a.click();URL.revokeObjectURL(url)}
 document.getElementById('searchForm').addEventListener('submit',e=>{e.preventDefault();query=document.getElementById('searchInput').value.trim();renderProducts();document.getElementById('shop').scrollIntoView({behavior:'smooth'})});
 document.getElementById('year').textContent = new Date().getFullYear();
-
 renderCategories();
 renderCart();
 renderAds();
